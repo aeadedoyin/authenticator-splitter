@@ -458,7 +458,6 @@
     const status = document.getElementById("status");
     const results = document.getElementById("results");
     const modalOverlay = document.getElementById("modalOverlay");
-    const modalCanvas = document.getElementById("modalCanvas");
     const modalIssuer = document.getElementById("modalIssuer");
     const modalName = document.getElementById("modalName");
     const modalDownload = document.getElementById("modalDownload");
@@ -629,14 +628,11 @@
     function scanForQRCodes(imageData, width, height) {
       const found = [];
 
-      // Try full image first
       const code = jsQR(imageData.data, width, height);
       if (code) {
         found.push(code.data);
       }
 
-      // If nothing found or we found a migration QR (could be more),
-      // try various crops to find QR codes in screenshots
       if (!code || found[0]?.startsWith("otpauth-migration://")) {
         const tiles = [
           // Center crop (QR in a phone screenshot)
@@ -673,7 +669,7 @@
         }
       }
 
-      // If still nothing, try downscaling (jsQR can struggle with very large images)
+      // jsQR can struggle with very large images
       if (found.length === 0 && (width > 1000 || height > 1000)) {
         const scale = Math.min(1, 800 / Math.max(width, height));
         const sw = Math.floor(width * scale);
@@ -914,7 +910,6 @@
       };
     }
 
-    // Close on overlay click (not modal itself)
     modalOverlay.addEventListener("click", (e) => {
       if (e.target === modalOverlay) modalOverlay.classList.remove("open");
     });
