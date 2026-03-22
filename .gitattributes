@@ -1,0 +1,12 @@
+# Auto detect text files and ensure LF line endings
+* text=auto eol=lf
+
+# Denote binary files
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.heic binary
+*.heif binary
+
+# Lock files are generated
+package-lock.json -diff linguist-generated=true
