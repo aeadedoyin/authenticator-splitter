@@ -26,7 +26,7 @@
   <link rel="canonical" href="">
   <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🔑</text></svg>">
   <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/libheif-js@1.18.2/libheif/libheif.min.js"></script>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -62,6 +62,23 @@
 
       .has-results .subtitle {
         display: none;
+      }
+
+      .controls {
+        flex-wrap: wrap;
+      }
+
+      .count-badge {
+        order: 1;
+        width: 100%;
+      }
+
+      .search-box {
+        order: 2;
+      }
+
+      .blur-toggle {
+        order: 3;
       }
     }
 
@@ -377,9 +394,22 @@
       color: #444;
       font-size: 0.75rem;
       padding-top: 1rem;
+      line-height: 1.25;
       max-width: 600px;
       width: 100%;
       flex-shrink: 0;
+    }
+
+    .github-link {
+      color: #555;
+      text-decoration: none;
+      margin-top: 0.75rem;
+      display: inline-block;
+      transition: color 0.15s;
+    }
+
+    .github-link:hover {
+      color: #888;
     }
   </style>
 </head>
@@ -417,7 +447,9 @@
   </div>
 
   <div class="security-note">
-    Everything runs in your browser. Your secrets never leave this device.
+    Everything runs in your browser.
+    <br>Your secrets never leave this device.
+    <br><a href="https://github.com/aeadedoyin/authenticator-splitter" target="_blank" rel="noopener" class="github-link">GitHub</a>
   </div>
 
   <script>
