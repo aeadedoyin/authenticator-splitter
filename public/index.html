@@ -1,0 +1,842 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Authenticator Splitter - Split 2FA Export QR Codes</title>
+  <meta name="description" content="Split Google Authenticator export QR codes into individual codes for 1Password and other authenticator apps. Runs entirely in your browser, your secrets never leave your device.">
+  <meta name="keywords" content="authenticator, 2FA, QR code, Google Authenticator, 1Password, TOTP, two-factor authentication, migration, export, split">
+  <meta name="author" content="Authenticator Splitter">
+  <meta name="robots" content="index, follow">
+  <meta name="theme-color" content="#0a0a0a">
+
+  <meta property="og:title" content="Authenticator Splitter">
+  <meta property="og:description" content="Split authenticator export QR codes into individual codes for 1Password. Works entirely in your browser.">
+  <meta property="og:type" content="website">
+  <meta property="og:locale" content="en_US">
+
+  <meta name="twitter:card" content="summary">
+  <meta name="twitter:title" content="Authenticator Splitter">
+  <meta name="twitter:description" content="Split authenticator export QR codes into individual codes for 1Password. Works entirely in your browser.">
+
+  <link rel="canonical" href="">
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🔑</text></svg>">
+  <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/libheif-js@1.18.2/libheif/libheif.min.js"></script>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: #0a0a0a;
+      color: #e0e0e0;
+      min-height: 100vh;
+      padding: 2rem;
+    }
+
+    @media (max-width: 640px) {
+      body {
+        padding: 1rem 0.75rem;
+      }
+    }
+
+    h1 {
+      font-size: 1.5rem;
+      font-weight: 600;
+      margin-bottom: 0.25rem;
+      max-width: 600px;
+      margin-left: auto;
+      margin-right: auto;
+    }
+
+    .subtitle {
+      color: #888;
+      font-size: 0.9rem;
+      margin-bottom: 2rem;
+      max-width: 600px;
+      margin-left: auto;
+      margin-right: auto;
+    }
+
+    .drop-zone {
+      border: 2px dashed #333;
+      border-radius: 12px;
+      padding: 3rem 2rem;
+      text-align: center;
+      cursor: pointer;
+      transition: all 0.3s;
+      margin-bottom: 2rem;
+      max-width: 600px;
+      margin-left: auto;
+      margin-right: auto;
+    }
+
+    .drop-zone:hover, .drop-zone.dragover {
+      border-color: #555;
+      background: #111;
+    }
+
+    .drop-zone p {
+      color: #888;
+      font-size: 0.95rem;
+    }
+
+    .drop-zone input {
+      display: none;
+    }
+
+    .status {
+      text-align: center;
+      padding: 1rem;
+      color: #888;
+      font-size: 0.9rem;
+    }
+
+    .status.error {
+      color: #ff6b6b;
+    }
+
+    .status.success {
+      display: none;
+    }
+
+    .results {
+      display: flex;
+      flex-direction: column;
+      gap: 0;
+      max-width: 600px;
+      max-height: 460px;
+      overflow-y: auto;
+      margin: 0 auto;
+    }
+
+    .results::-webkit-scrollbar {
+      width: 6px;
+    }
+
+    .results::-webkit-scrollbar-track {
+      background: transparent;
+    }
+
+    .results::-webkit-scrollbar-thumb {
+      background: #333;
+      border-radius: 3px;
+    }
+
+    .row {
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+      padding: 0.85rem 1rem;
+      border-bottom: 1px solid #1a1a1a;
+      cursor: pointer;
+      transition: background 0.15s;
+      border-radius: 8px;
+    }
+
+    .row:hover {
+      background: #151515;
+    }
+
+    .row .num {
+      color: #444;
+      font-size: 0.8rem;
+      min-width: 1.5rem;
+      text-align: right;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .row .issuer {
+      font-weight: 600;
+      font-size: 0.95rem;
+      color: #fff;
+    }
+
+    .row .name {
+      font-size: 0.8rem;
+      color: #666;
+      margin-left: auto;
+      text-align: right;
+      max-width: 50%;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .row .arrow {
+      color: #333;
+      font-size: 1.1rem;
+      margin-left: 0.5rem;
+    }
+
+    /* Modal overlay */
+    .modal-overlay {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.8);
+      backdrop-filter: blur(8px);
+      z-index: 100;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .modal-overlay.open {
+      display: flex;
+    }
+
+    .modal {
+      background: #141414;
+      border: 1px solid #222;
+      border-radius: 16px;
+      padding: 2rem;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 1rem;
+      max-width: 360px;
+      width: 90%;
+      position: relative;
+    }
+
+    #modalQRContainer {
+      border-radius: 8px;
+      overflow: hidden;
+      background: #fff;
+      padding: 8px;
+    }
+
+    #modalQRContainer img {
+      display: block;
+    }
+
+    .modal .modal-issuer {
+      font-weight: 600;
+      font-size: 1.1rem;
+      color: #fff;
+    }
+
+    .modal .modal-name {
+      font-size: 0.85rem;
+      color: #888;
+      word-break: break-all;
+      text-align: center;
+    }
+
+    .modal .modal-actions {
+      display: flex;
+      gap: 0.75rem;
+      margin-top: 0.5rem;
+    }
+
+    .modal .modal-actions button {
+      padding: 0.5rem 1.25rem;
+      border-radius: 8px;
+      border: 1px solid #333;
+      background: #1a1a1a;
+      color: #ccc;
+      font-size: 0.85rem;
+      cursor: pointer;
+      transition: background 0.15s, border-color 0.15s;
+    }
+
+    .modal .modal-actions button:hover {
+      background: #222;
+      border-color: #444;
+    }
+
+    .modal .modal-actions .download-btn {
+      background: #1a73e8;
+      border-color: #1a73e8;
+      color: #fff;
+    }
+
+    .modal .modal-actions .download-btn:hover {
+      background: #1557b0;
+    }
+
+    .controls {
+      display: none;
+      max-width: 600px;
+      margin: 0 auto 0.5rem;
+      gap: 0.75rem;
+      align-items: center;
+    }
+
+    .controls.visible {
+      display: flex;
+    }
+
+    .count-badge {
+      font-size: 0.8rem;
+      color: #666;
+      white-space: nowrap;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .search-box {
+      flex: 1;
+      padding: 0.55rem 0.85rem;
+      border-radius: 8px;
+      border: 1px solid #222;
+      background: #141414;
+      color: #e0e0e0;
+      font-size: 0.9rem;
+      outline: none;
+      transition: border-color 0.15s;
+    }
+
+    .search-box::placeholder {
+      color: #555;
+    }
+
+    .search-box:focus {
+      border-color: #444;
+    }
+
+    .blur-toggle {
+      display: flex;
+      align-items: center;
+      gap: 0.4rem;
+      cursor: pointer;
+      font-size: 0.8rem;
+      color: #888;
+      white-space: nowrap;
+      user-select: none;
+    }
+
+    .blur-toggle input {
+      accent-color: #1a73e8;
+      cursor: pointer;
+    }
+
+    .row.blurred .issuer,
+    .row.blurred .name {
+      filter: blur(5px);
+      transition: filter 0.2s;
+    }
+
+    .row.blurred:hover .issuer,
+    .row.blurred:hover .name {
+      filter: none;
+    }
+
+    .security-note {
+      text-align: center;
+      color: #444;
+      font-size: 0.75rem;
+      margin-top: 3rem;
+      padding-top: 1.5rem;
+      border-top: 1px solid #1a1a1a;
+    }
+  </style>
+</head>
+<body>
+  <h1>Authenticator Splitter</h1>
+  <p class="subtitle">Split authenticator export QR codes into individual codes for 1Password. Works with Google Authenticator and other compatible apps.</p>
+
+  <div class="drop-zone" id="dropZone">
+    <p>Drop your authenticator export image(s) here, or click to select</p>
+    <input type="file" id="fileInput" accept="image/*,.heic,.heif" multiple>
+  </div>
+
+  <div id="status" class="status"></div>
+  <div class="controls" id="controls">
+    <span class="count-badge" id="countBadge"></span>
+    <input type="text" class="search-box" id="searchBox" placeholder="Search accounts...">
+    <label class="blur-toggle">
+      <input type="checkbox" id="blurToggle"> Hide
+    </label>
+  </div>
+  <div id="results" class="results"></div>
+
+  <div class="modal-overlay" id="modalOverlay">
+    <div class="modal" id="modal">
+      <div id="modalQRContainer"></div>
+      <div class="modal-issuer" id="modalIssuer"></div>
+      <div class="modal-name" id="modalName"></div>
+      <div class="modal-actions">
+        <button class="download-btn" id="modalDownload">Download PNG</button>
+        <button id="modalCopy">Copy URI</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="security-note">
+    Everything runs in your browser. Your secrets never leave this device.
+  </div>
+
+  <script>
+    const dropZone = document.getElementById("dropZone");
+    const fileInput = document.getElementById("fileInput");
+    const status = document.getElementById("status");
+    const results = document.getElementById("results");
+    const modalOverlay = document.getElementById("modalOverlay");
+    const modalCanvas = document.getElementById("modalCanvas");
+    const modalIssuer = document.getElementById("modalIssuer");
+    const modalName = document.getElementById("modalName");
+    const modalDownload = document.getElementById("modalDownload");
+    const modalCopy = document.getElementById("modalCopy");
+    const controls = document.getElementById("controls");
+    const searchBox = document.getElementById("searchBox");
+    const blurToggle = document.getElementById("blurToggle");
+    const countBadge = document.getElementById("countBadge");
+    let allAccountsCache = [];
+
+    searchBox.addEventListener("input", () => {
+      const q = searchBox.value.toLowerCase();
+      const rows = results.querySelectorAll(".row");
+      rows.forEach((row, i) => {
+        const account = allAccountsCache[i];
+        const text = `${account.issuer} ${account.name}`.toLowerCase();
+        row.style.display = text.includes(q) ? "" : "none";
+      });
+    });
+
+    blurToggle.addEventListener("change", () => {
+      const rows = results.querySelectorAll(".row");
+      rows.forEach(row => {
+        row.classList.toggle("blurred", blurToggle.checked);
+      });
+    });
+
+    dropZone.addEventListener("click", () => fileInput.click());
+    dropZone.addEventListener("dragover", (e) => {
+      e.preventDefault();
+      dropZone.classList.add("dragover");
+    });
+    dropZone.addEventListener("dragleave", () => dropZone.classList.remove("dragover"));
+    dropZone.addEventListener("drop", (e) => {
+      e.preventDefault();
+      dropZone.classList.remove("dragover");
+      if (e.dataTransfer.files.length) handleFiles(e.dataTransfer.files);
+    });
+    fileInput.addEventListener("change", () => {
+      if (fileInput.files.length) handleFiles(fileInput.files);
+    });
+
+    function isHeic(file) {
+      const name = file.name.toLowerCase();
+      return name.endsWith(".heic") || name.endsWith(".heif") || file.type === "image/heic" || file.type === "image/heif";
+    }
+
+    let heifModule = null;
+    async function getHeifModule() {
+      if (!heifModule) heifModule = await libheif();
+      return heifModule;
+    }
+
+    async function convertHeicToBlob(file) {
+      const module = await getHeifModule();
+      const buffer = await file.arrayBuffer();
+      const decoder = new module.HeifDecoder();
+      const images = decoder.decode(new Uint8Array(buffer));
+      if (!images || images.length === 0) throw new Error("Could not decode HEIC file");
+
+      const image = images[0];
+      const w = image.get_width();
+      const h = image.get_height();
+      const canvas = document.createElement("canvas");
+      canvas.width = w;
+      canvas.height = h;
+      const ctx = canvas.getContext("2d");
+      const imageData = ctx.createImageData(w, h);
+      await new Promise((resolve, reject) => {
+        image.display(imageData, (displayData) => {
+          if (!displayData) return reject(new Error("HEIC display failed"));
+          resolve();
+        });
+      });
+      ctx.putImageData(imageData, 0, 0);
+      return new Promise((resolve) => canvas.toBlob(resolve, "image/png"));
+    }
+
+    async function handleFiles(fileList) {
+      status.className = "status";
+      status.textContent = "";
+      results.innerHTML = "";
+      controls.classList.remove("visible");
+      allAccountsCache = [];
+
+      const files = Array.from(fileList);
+      const total = files.length;
+      let allAccounts = [];
+      let migrationFound = false;
+      let errors = [];
+
+      for (let i = 0; i < files.length; i++) {
+        const file = files[i];
+        const label = total > 1 ? ` (${i + 1}/${total})` : "";
+        status.textContent = `Processing${label}: ${file.name}...`;
+
+        try {
+          let imageBlob = file;
+          if (isHeic(file)) {
+            status.textContent = `Converting HEIC${label}: ${file.name}...`;
+            imageBlob = await convertHeicToBlob(file);
+          }
+
+          const { qrCodes } = await loadAndScanImage(imageBlob);
+
+          if (qrCodes.length === 0) {
+            errors.push(`${file.name}: no QR code found`);
+            continue;
+          }
+
+          for (const qrData of qrCodes) {
+            if (qrData.startsWith("otpauth-migration://")) {
+              migrationFound = true;
+              const accounts = decodeMigrationPayload(qrData);
+              allAccounts.push(...accounts);
+            } else if (qrData.startsWith("otpauth://")) {
+              allAccounts.push({ uri: qrData, name: qrData, issuer: "" });
+            }
+          }
+        } catch (err) {
+          errors.push(`${file.name}: ${err.message}`);
+        }
+      }
+
+      if (allAccounts.length === 0) {
+        status.className = "status error";
+        if (errors.length) {
+          status.textContent = errors.join("; ");
+        } else {
+          status.textContent = migrationFound
+            ? "Migration QR decoded but contained no accounts."
+            : "QR found but it's not an authenticator export.";
+        }
+        return;
+      }
+
+      let msg = `${allAccounts.length} account${allAccounts.length > 1 ? "s" : ""}`;
+      if (errors.length) msg += ` (${errors.length} failed)`;
+      status.className = "status success";
+      status.textContent = "";
+      renderAccounts(allAccounts, msg);
+    }
+
+    function loadAndScanImage(blob) {
+      return new Promise((resolve, reject) => {
+        const img = new Image();
+        img.onload = () => {
+          const canvas = document.createElement("canvas");
+          canvas.width = img.width;
+          canvas.height = img.height;
+          const ctx = canvas.getContext("2d");
+          ctx.drawImage(img, 0, 0);
+          const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+          const qrCodes = scanForQRCodes(imageData, canvas.width, canvas.height);
+          URL.revokeObjectURL(img.src);
+          resolve({ qrCodes });
+        };
+        img.onerror = () => {
+          URL.revokeObjectURL(img.src);
+          reject(new Error("Failed to load image"));
+        };
+        img.src = URL.createObjectURL(blob);
+      });
+    }
+
+    function scanForQRCodes(imageData, width, height) {
+      const found = [];
+
+      // Try full image first
+      const code = jsQR(imageData.data, width, height);
+      if (code) {
+        found.push(code.data);
+      }
+
+      // If nothing found or we found a migration QR (could be more),
+      // try various crops to find QR codes in screenshots
+      if (!code || found[0]?.startsWith("otpauth-migration://")) {
+        const tiles = [
+          // Center crop (QR in a phone screenshot)
+          [width * 0.1, height * 0.2, width * 0.8, height * 0.6],
+          [width * 0.05, height * 0.15, width * 0.9, height * 0.7],
+          // Center square crop
+          ...(height > width ? [
+            [0, (height - width) / 2, width, width],
+            [width * 0.05, height * 0.25, width * 0.9, width * 0.9],
+          ] : []),
+          // Quadrants
+          [0, 0, width / 2, height / 2],
+          [width / 2, 0, width / 2, height / 2],
+          [0, height / 2, width / 2, height / 2],
+          [width / 2, height / 2, width / 2, height / 2],
+          // Horizontal thirds
+          [0, 0, width, height / 3],
+          [0, height / 3, width, height / 3],
+          [0, (height / 3) * 2, width, height / 3],
+        ];
+
+        for (const [tx, ty, tw, th] of tiles) {
+          const cx = Math.floor(Math.max(0, tx));
+          const cy = Math.floor(Math.max(0, ty));
+          const cw = Math.floor(Math.min(tw, width - cx));
+          const ch = Math.floor(Math.min(th, height - cy));
+          if (cw < 50 || ch < 50) continue;
+
+          const cropped = cropImageData(imageData, width, cx, cy, cw, ch);
+          const tileCode = jsQR(cropped, cw, ch);
+          if (tileCode && !found.includes(tileCode.data)) {
+            found.push(tileCode.data);
+          }
+        }
+      }
+
+      // If still nothing, try downscaling (jsQR can struggle with very large images)
+      if (found.length === 0 && (width > 1000 || height > 1000)) {
+        const scale = Math.min(1, 800 / Math.max(width, height));
+        const sw = Math.floor(width * scale);
+        const sh = Math.floor(height * scale);
+        const canvas = document.createElement("canvas");
+        canvas.width = sw;
+        canvas.height = sh;
+        const ctx = canvas.getContext("2d");
+        const srcCanvas = document.createElement("canvas");
+        srcCanvas.width = width;
+        srcCanvas.height = height;
+        const srcCtx = srcCanvas.getContext("2d");
+        srcCtx.putImageData(new ImageData(new Uint8ClampedArray(imageData.data), width, height), 0, 0);
+        ctx.drawImage(srcCanvas, 0, 0, sw, sh);
+        const scaled = ctx.getImageData(0, 0, sw, sh);
+        const scaledCode = jsQR(scaled.data, sw, sh);
+        if (scaledCode) found.push(scaledCode.data);
+      }
+
+      return found;
+    }
+
+    function cropImageData(imageData, fullWidth, x, y, w, h) {
+      const cropped = new Uint8ClampedArray(w * h * 4);
+      for (let row = 0; row < h; row++) {
+        const srcOffset = ((y + row) * fullWidth + x) * 4;
+        const dstOffset = row * w * 4;
+        cropped.set(imageData.data.subarray(srcOffset, srcOffset + w * 4), dstOffset);
+      }
+      return cropped;
+    }
+
+    // Minimal protobuf decoder for Google Authenticator migration format
+    function decodeMigrationPayload(uri) {
+      const url = new URL(uri);
+      const dataParam = url.searchParams.get("data");
+      if (!dataParam) throw new Error("No data parameter in migration URI");
+
+      const bytes = Uint8Array.from(atob(dataParam), c => c.charCodeAt(0));
+      const accounts = [];
+
+      // The migration payload is a protobuf message:
+      // message MigrationPayload { repeated OtpParameters otp_parameters = 1; }
+      // message OtpParameters {
+      //   bytes secret = 1; string name = 2; string issuer = 3;
+      //   int32 algorithm = 4; int32 digits = 5; int32 type = 6; int64 counter = 7;
+      // }
+
+      let pos = 0;
+
+      function readVarint() {
+        let result = 0, shift = 0;
+        while (pos < bytes.length) {
+          const b = bytes[pos++];
+          result |= (b & 0x7f) << shift;
+          if ((b & 0x80) === 0) return result;
+          shift += 7;
+        }
+        return result;
+      }
+
+      function readBytes(len) {
+        const data = bytes.slice(pos, pos + len);
+        pos += len;
+        return data;
+      }
+
+      function decodeOtpParameters(data) {
+        let p = 0;
+        const param = { secret: null, name: "", issuer: "", algorithm: 0, digits: 0, type: 0, counter: 0 };
+
+        function readVarInt() {
+          let result = 0, shift = 0;
+          while (p < data.length) {
+            const b = data[p++];
+            result |= (b & 0x7f) << shift;
+            if ((b & 0x80) === 0) return result;
+            shift += 7;
+          }
+          return result;
+        }
+
+        while (p < data.length) {
+          const tag = readVarInt();
+          const fieldNumber = tag >> 3;
+          const wireType = tag & 0x7;
+
+          if (wireType === 2) {
+            const len = readVarInt();
+            const fieldData = data.slice(p, p + len);
+            p += len;
+            if (fieldNumber === 1) param.secret = fieldData;
+            else if (fieldNumber === 2) param.name = new TextDecoder().decode(fieldData);
+            else if (fieldNumber === 3) param.issuer = new TextDecoder().decode(fieldData);
+          } else if (wireType === 0) {
+            const val = readVarInt();
+            if (fieldNumber === 4) param.algorithm = val;
+            else if (fieldNumber === 5) param.digits = val;
+            else if (fieldNumber === 6) param.type = val;
+            else if (fieldNumber === 7) param.counter = val;
+          }
+        }
+
+        return param;
+      }
+
+      while (pos < bytes.length) {
+        const tag = readVarint();
+        const fieldNumber = tag >> 3;
+        const wireType = tag & 0x7;
+
+        if (wireType === 2) {
+          const len = readVarint();
+          const fieldData = readBytes(len);
+          if (fieldNumber === 1) {
+            const param = decodeOtpParameters(fieldData);
+            if (param.secret) {
+              accounts.push(buildOtpAuthUri(param));
+            }
+          }
+        } else if (wireType === 0) {
+          readVarint(); // skip varint fields at top level
+        }
+      }
+
+      return accounts;
+    }
+
+    function base32Encode(data) {
+      const alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567";
+      let bits = 0, value = 0, output = "";
+      for (const byte of data) {
+        value = (value << 8) | byte;
+        bits += 8;
+        while (bits >= 5) {
+          output += alphabet[(value >>> (bits - 5)) & 31];
+          bits -= 5;
+        }
+      }
+      if (bits > 0) {
+        output += alphabet[(value << (5 - bits)) & 31];
+      }
+      return output;
+    }
+
+    function buildOtpAuthUri(param) {
+      const ALGO_MAP = { 0: "SHA1", 1: "SHA1", 2: "SHA256", 3: "SHA512", 4: "MD5" };
+      const DIGITS_MAP = { 0: "6", 1: "6", 2: "8" };
+      const TYPE_MAP = { 0: "totp", 1: "hotp", 2: "totp" };
+
+      const type = TYPE_MAP[param.type] || "totp";
+      const secret = base32Encode(param.secret);
+      const algorithm = ALGO_MAP[param.algorithm] || "SHA1";
+      const digits = DIGITS_MAP[param.digits] || "6";
+
+      const label = param.name || "Unknown";
+      const issuer = param.issuer || "";
+
+      let uri = `otpauth://${type}/${encodeURIComponent(label)}?secret=${secret}&algorithm=${algorithm}&digits=${digits}`;
+
+      if (issuer) uri += `&issuer=${encodeURIComponent(issuer)}`;
+      if (type === "hotp") uri += `&counter=${param.counter}`;
+
+      return { uri, name: label, issuer };
+    }
+
+    async function renderAccounts(accounts, countMsg) {
+      allAccountsCache = accounts;
+      controls.classList.add("visible");
+      countBadge.textContent = countMsg || "";
+      searchBox.value = "";
+
+      accounts.forEach((account, i) => {
+        const row = document.createElement("div");
+        row.className = "row";
+        if (blurToggle.checked) row.classList.add("blurred");
+        row.addEventListener("click", () => openModal(i));
+
+        const num = document.createElement("span");
+        num.className = "num";
+        num.textContent = i + 1;
+
+        const issuerEl = document.createElement("span");
+        issuerEl.className = "issuer";
+        issuerEl.textContent = account.issuer || account.name.split(":")[0] || "Unknown";
+
+        const nameEl = document.createElement("span");
+        nameEl.className = "name";
+        nameEl.textContent = account.name.includes(":") ? account.name.split(":").pop().trim() : account.name;
+
+        const arrow = document.createElement("span");
+        arrow.className = "arrow";
+        arrow.textContent = "\u203A";
+
+        row.appendChild(num);
+        row.appendChild(issuerEl);
+        row.appendChild(nameEl);
+        row.appendChild(arrow);
+        results.appendChild(row);
+      });
+    }
+
+    async function openModal(index) {
+      const account = allAccountsCache[index];
+      modalIssuer.textContent = account.issuer || account.name.split(":")[0] || "Unknown";
+      modalName.textContent = account.name;
+      modalCopy.textContent = "Copy URI";
+
+      const qrContainer = document.getElementById("modalQRContainer");
+      qrContainer.innerHTML = "";
+      new QRCode(qrContainer, {
+        text: account.uri,
+        width: 240,
+        height: 240,
+        colorDark: "#000000",
+        colorLight: "#ffffff",
+        correctLevel: QRCode.CorrectLevel.M
+      });
+
+      modalOverlay.classList.add("open");
+
+      modalDownload.onclick = () => {
+        const img = qrContainer.querySelector("img") || qrContainer.querySelector("canvas");
+        if (!img) return;
+        const link = document.createElement("a");
+        const label = (account.issuer || account.name).replace(/[^a-zA-Z0-9]/g, "_");
+        link.download = `${label}_2fa.png`;
+        link.href = img.src || img.toDataURL("image/png");
+        link.click();
+      };
+
+      modalCopy.onclick = () => {
+        navigator.clipboard.writeText(account.uri);
+        modalCopy.textContent = "Copied!";
+        setTimeout(() => { modalCopy.textContent = "Copy URI"; }, 1500);
+      };
+    }
+
+    // Close on overlay click (not modal itself)
+    modalOverlay.addEventListener("click", (e) => {
+      if (e.target === modalOverlay) modalOverlay.classList.remove("open");
+    });
+
+    document.getElementById("modal").addEventListener("click", (e) => {
+      e.stopPropagation();
+    });
+
+    document.addEventListener("keydown", (e) => {
+      if (e.key === "Escape") modalOverlay.classList.remove("open");
+    });
+  </script>
+</body>
+</html>
