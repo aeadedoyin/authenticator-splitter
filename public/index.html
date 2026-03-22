@@ -32,7 +32,7 @@
     * { margin: 0; padding: 0; box-sizing: border-box; }
 
     body {
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      font-family: "SF Pro Display", "SF Pro Text", "Helvetica Neue", Avenir, "Segoe UI", system-ui, sans-serif;
       background: #0a0a0a;
       color: #e0e0e0;
       height: 100vh;
@@ -48,8 +48,20 @@
         padding: 1rem 0.75rem;
       }
 
-      .drop-zone {
-        padding: 1.5rem 1rem;
+      .has-results .drop-zone {
+        padding: 0.5rem 1rem;
+        border-radius: 8px;
+        margin-bottom: 1rem;
+      }
+
+      .has-results h1 {
+        font-size: 1.1rem;
+        margin-bottom: 1.5rem;
+        margin-top: 1rem;
+      }
+
+      .has-results .subtitle {
+        display: none;
       }
     }
 
@@ -65,6 +77,7 @@
     .subtitle {
       color: #888;
       font-size: 0.9rem;
+      line-height: 1.6;
       margin-bottom: 2.5rem;
       max-width: 600px;
       width: 100%;
@@ -105,6 +118,10 @@
       font-size: 0.9rem;
     }
 
+    .status:empty {
+      display: none;
+    }
+
     .status.error {
       color: #ff6b6b;
     }
@@ -119,10 +136,13 @@
       gap: 0;
       max-width: 600px;
       width: 100%;
-      flex: 1;
       min-height: 0;
       overflow-y: auto;
       margin: 0 auto;
+    }
+
+    .results:not(:empty) {
+      flex: 1;
     }
 
     .results::-webkit-scrollbar {
@@ -338,11 +358,24 @@
       filter: none;
     }
 
+    .main-content {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      flex: 1;
+      min-height: 0;
+      width: 100%;
+      justify-content: center;
+    }
+
+    .main-content:has(.results:not(:empty)) {
+      justify-content: flex-start;
+    }
+
     .security-note {
       text-align: center;
       color: #444;
       font-size: 0.75rem;
-      margin-top: auto;
       padding-top: 1rem;
       max-width: 600px;
       width: 100%;
@@ -351,23 +384,25 @@
   </style>
 </head>
 <body>
-  <h1>Authenticator Splitter</h1>
-  <p class="subtitle">Split authenticator export QR codes into individual codes for 1Password. Works with Google Authenticator and other compatible apps.</p>
+  <div class="main-content">
+    <h1>Authenticator Splitter</h1>
+    <p class="subtitle">Split authenticator export QR codes into individual codes for 1Password. Works with Google Authenticator and other compatible apps.</p>
 
-  <div class="drop-zone" id="dropZone">
-    <p>Drop your authenticator export image(s) here, or click to select</p>
-    <input type="file" id="fileInput" accept="image/*,.heic,.heif" multiple>
-  </div>
+    <div class="drop-zone" id="dropZone">
+      <p id="dropText">Drop your authenticator export image(s) here, or click to select</p>
+      <input type="file" id="fileInput" accept="image/*,.heic,.heif" multiple>
+    </div>
 
-  <div id="status" class="status"></div>
-  <div class="controls" id="controls">
-    <span class="count-badge" id="countBadge"></span>
-    <input type="text" class="search-box" id="searchBox" placeholder="Search accounts...">
-    <label class="blur-toggle">
-      <input type="checkbox" id="blurToggle" checked> Hide
-    </label>
+    <div id="status" class="status"></div>
+    <div class="controls" id="controls">
+      <span class="count-badge" id="countBadge"></span>
+      <input type="text" class="search-box" id="searchBox" placeholder="Search accounts...">
+      <label class="blur-toggle">
+        <input type="checkbox" id="blurToggle" checked> Hide
+      </label>
+    </div>
+    <div id="results" class="results"></div>
   </div>
-  <div id="results" class="results"></div>
 
   <div class="modal-overlay" id="modalOverlay">
     <div class="modal" id="modal">
@@ -475,6 +510,8 @@
       status.textContent = "";
       results.innerHTML = "";
       controls.classList.remove("visible");
+      document.body.classList.remove("has-results");
+      document.getElementById("dropText").textContent = "Drop your authenticator export image(s) here, or click to select";
       allAccountsCache = [];
 
       const files = Array.from(fileList);
@@ -774,6 +811,8 @@
     async function renderAccounts(accounts, countMsg) {
       allAccountsCache = accounts;
       controls.classList.add("visible");
+      document.body.classList.add("has-results");
+      document.getElementById("dropText").textContent = "Import another export";
       countBadge.textContent = countMsg || "";
       searchBox.value = "";
 
